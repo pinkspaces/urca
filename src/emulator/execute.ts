@@ -7,7 +7,7 @@ const PC: RegisterArgument = { type: "register", value: 0 };
 function get(core: CoreState, value: Argument) {
   switch (value.type) {
     case "register": {
-      return core.getWordRegister(value.value);
+      return core.getRegister(value.value).value;
     }
     case "max":
     case "word":
@@ -24,7 +24,7 @@ function get(core: CoreState, value: Argument) {
 function get_signed(core: CoreState, value: Argument) {
   switch (value.type) {
     case "register": {
-      return core.getWordRegisterSigned(value.value);
+      return core.getRegisterSigned(value.value).value;
     }
     case "word":
     case "address":
@@ -43,7 +43,7 @@ function get_signed(core: CoreState, value: Argument) {
 function set(core: CoreState, destination: Argument, value: number) {
   switch (destination.type) {
     case "register": {
-      return core.setWordRegister(destination.value, value);
+      return core.setRegister(destination.value, value);
     }
     case "port": {
       console.log(`[out%${Ports[destination.value]}] ${value}`)
@@ -56,13 +56,13 @@ function set(core: CoreState, destination: Argument, value: number) {
 function get_address(core: CoreState, value: Argument): number {
   switch (value.type) {
     case "address": return value.value;
-    case "register": return core.getAddressRegister(value.value);
+    case "register": return core.getRegister(value.value).value;
   }
   return -1;
 }
 function set_address(core: CoreState, destination: Argument, value: number) {
   switch (destination.type) {
-    case "register": return core.setAddressRegister(destination.value, value);
+    case "register": return core.setRegister(destination.value, value);
   }
   return -1;
 }
@@ -72,7 +72,6 @@ export function step(core: CoreState) {
   const instructionResult = fetch(core);
   if (instructionResult.is_err()) return instructionResult;
   const instruction = instructionResult.unwrap();
-  console.log(instruction);
 
   switch (instruction.name) {
     case "add": {
@@ -267,26 +266,26 @@ export function step(core: CoreState) {
 
     case "psh": {
       const value = get(core, instruction.arguments[0]);
-      core.registers.address[1] -= core.memoryctl.bitwidths.word;
-      core.memoryctl.setWord(core.registers.address[1], value);
+      core.setRegister(1, core.getRegister(1).value - core.memoryctl.bitwidths.word);
+      core.memoryctl.setWord(core.getRegister(1).value, value);
       break;
     }
     case "pop": {
-      const value = core.memoryctl.getWord(core.registers.address[1]);
-      core.registers.address[1] += core.memoryctl.bitwidths.word;
+      const value = core.memoryctl.getWord(core.getRegister(1).value);
+      core.setRegister(1, core.getRegister(1).value + core.memoryctl.bitwidths.word);
       set(core, instruction.arguments[0], value.unwrap());
       break;
     }
     case 'cal': {
       const addr = get_address(core, instruction.arguments[0]);
-      core.registers.address[1] -= core.memoryctl.bitwidths.address;
-      core.memoryctl.setAddress(core.registers.address[1], core.registers.address[0]);
+      core.setRegister(1, core.getRegister(1).value - core.memoryctl.bitwidths.address);
+      core.memoryctl.setAddress(core.getRegister(1).value, core.getRegister(0).value);
       set_address(core, PC, addr);
       break;
     }
     case 'ret': {
-      const addr = core.memoryctl.getAddress(core.registers.address[1]);
-      core.registers.address[1] += core.memoryctl.bitwidths.address;
+      const addr = core.memoryctl.getAddress(core.getRegister(1).value);
+      core.setRegister(1, core.getRegister(1).value + core.memoryctl.bitwidths.address);
       set_address(core, PC, addr.unwrap());
       break;
     }
@@ -562,13 +561,13 @@ export function step(core: CoreState) {
 
     case "psha": {
       const value = get_address(core, instruction.arguments[0]);
-      core.registers.address[1] -= core.memoryctl.bitwidths.address;
-      core.memoryctl.setAddress(core.registers.address[1], value);
+      core.setRegister(1, core.getRegister(1).value - core.memoryctl.bitwidths.address);
+      core.memoryctl.setAddress(core.getRegister(1).value, value);
       break;
     }
     case "popa": {
-      const value = core.memoryctl.getAddress(core.registers.address[1]);
-      core.registers.address[1] += core.memoryctl.bitwidths.address;
+      const value = core.memoryctl.getAddress(core.getRegister(1).value);
+      core.setRegister(1, core.getRegister(1).value + core.memoryctl.bitwidths.address);
       set_address(core, instruction.arguments[0], value.unwrap());
       break;
     }

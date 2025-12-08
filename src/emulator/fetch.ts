@@ -15,9 +15,9 @@ type Instruction = {
 }
 
 export function fetch(core: CoreState): Result<Instruction, string> {
-  const instruction_head = core.memoryctl.getInstruction(core.registers.address[0]);
+  const instruction_head = core.memoryctl.getInstruction(core.registers[0].value);
   if (instruction_head.is_err()) return instruction_head;
-  core.registers.address[0] += core.memoryctl.bitwidths.byte == 1 ? 2 : 1;
+  core.setRegister(0, core.getRegister(0).value + (core.memoryctl.bitwidths.byte == 1 ? 2 : 1));
   const instruction_structure = InstructionSet[instruction_head.unwrap()];
 
   const fetched_instruction: Instruction = {
@@ -31,22 +31,22 @@ export function fetch(core: CoreState): Result<Instruction, string> {
       case "port":
       case "register":
       case "word": {
-        const v = core.memoryctl.getWord(core.registers.address[0]);
+        const v = core.memoryctl.getWord(core.registers[0].value);
         if (v.is_err()) return v;
         fetched_instruction.arguments.push({
           type: type.type, value: v.unwrap()
         });
-        core.registers.address[0] += core.memoryctl.bitwidths.word;
+        core.setRegister(0, core.getRegister(0).value + core.memoryctl.bitwidths.word);
         break;
       };
       case "max":
       case "address": {
-        const v = core.memoryctl.getAddress(core.registers.address[0]);
+        const v = core.memoryctl.getAddress(core.registers[0].value);
         if (v.is_err()) return v;
         fetched_instruction.arguments.push({
           type: type.type, value: v.unwrap()
         });
-        core.registers.address[0] += core.memoryctl.bitwidths.address;
+        core.setRegister(0, core.getRegister(0).value + core.memoryctl.bitwidths.address);
         break;
       }
     }

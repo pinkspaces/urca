@@ -14,24 +14,37 @@ export type EmulatorState = {
   maxSize: number;
 };
 
+type Register = AddressRegister | WordRegister;
+type AddressRegister = {
+  type: "address";
+  bitwidths: {
+    byte: number;
+    address: number;
+  };
+  value: number;
+};
+
+type WordRegister = {
+  type: "word";
+  bitwidths: {
+    byte: number;
+    word: number;
+  };
+  value: number;
+}
+
 export type CoreState = {
   halted: boolean;
   bitness: 8 | 16 | 32;
-  registers: {
-    word: Uint8Array | Uint16Array | Uint32Array;
-    address: Uint8Array | Uint16Array | Uint32Array;
-  };
+  registers: Register[];
   port_mappings: {
     [port: number]: { out: (value: number) => void, in: () => number };
   };
   memoryctl: MemoryController;
-  getWordRegister(index: number): number;
-  getWordRegisterSigned(index: number): number;
-  setWordRegister(index: number, value: number): void;
+  getRegister(index: number): Register;
+  getRegisterSigned(index: number): Register;
 
-  getAddressRegister(index: number): number;
-  getAddressRegisterSigned(index: number): number;
-  setAddressRegister(index: number, value: number): void;
+  setRegister(index: number, value: number): void;
 };
 
 type MemoryController = {
@@ -116,6 +129,25 @@ export function memory(emulator: EmulatorState) {
   };
   return memoryctl;
 };
+
+function register(emulator: EmulatorState, type: "address" | "word"): AddressRegister | WordRegister {
+  if (type == "address") return {
+    type: "address",
+    bitwidths: {
+      byte: emulator.byteSize,
+      address: emulator.addressSize
+    },
+    value: 0
+  };
+  return {
+    type: "word",
+    bitwidths: {
+      byte: emulator.byteSize,
+      word: emulator.wordSize
+    },
+    value: 0
+  };
+};
 export function core(emulator: EmulatorState, options: {
   bitness: 8 | 16 | 32,
   registers: {
@@ -124,38 +156,32 @@ export function core(emulator: EmulatorState, options: {
   }
 }) {
   const memoryctl = memory(emulator);
-  const WordRegisterArray = global[`Uint${emulator.wordSize * emulator.byteSize * 8}Array` as 'Uint8Array' | "Uint16Array" | "Uint32Array"];
-  const AddressRegisterArray = global[`Uint${emulator.addressSize * emulator.byteSize * 8}Array` as 'Uint8Array' | "Uint16Array" | "Uint32Array"];
-  const SignedWordRegisterArray = global[`Int${emulator.wordSize * emulator.byteSize * 8}Array` as 'Int8Array' | "Int16Array" | "Int32Array"];
-  const SignedAddressRegisterArray = global[`Int${emulator.addressSize * emulator.byteSize * 8}Array` as 'Int8Array' | "Int16Array" | "Int32Array"];
+  const addressRegisters = Array.from({ length: options.registers.address + 2 }, () => register(emulator, "address"));
+  const wordRegisters = Array.from({ length: options.registers.word }, () => register(emulator, "word"));
+  addressRegisters[1].value = emulator.heapSize + emulator.stackSize;
   const constructed: CoreState = {
     memoryctl,
     bitness: options.bitness,
     halted: false,
-    registers: {
-      word: new WordRegisterArray(options.registers.word),
-      address: new AddressRegisterArray(options.registers.address),
-    },
+    registers: [...addressRegisters, ...wordRegisters],
     port_mappings: {},
-    getWordRegister(index: number): number {
-      return this.registers.word[index];
+    getRegister(index: number) {
+      return this.registers[index];
     },
-    getWordRegisterSigned(index: number): number {
-      return new SignedWordRegisterArray(this.registers.word)[index];
+    getRegisterSigned(index: number) {
+      const register = this.registers[index];
+      const wordBitwidth = emulator.wordSize * emulator.byteSize * 8;
+      const addressBitwidth = emulator.addressSize * emulator.byteSize * 8;
+      if (register.type == "word") return { bitwidths: register.bitwidths, type: register.type, value: (register.value << wordBitwidth) >> wordBitwidth };
+      return { bitwidths: register.bitwidths, type: register.type, value: (register.value << addressBitwidth) >> addressBitwidth };
     },
-    setWordRegister(index: number, value: number) {
-      this.registers.word[index] = value;
-    },
-
-    getAddressRegister(index: number): number {
-      return this.registers.address[index];
-    },
-    getAddressRegisterSigned(index: number): number {
-      return new SignedAddressRegisterArray(this.registers.address)[index];
-    },
-    setAddressRegister(index: number, value: number) {
-      this.registers.address[index] = value;
-    },
+    setRegister(index: number, value: number) {
+      const register = this.registers[index];
+      const wordBitwidth = emulator.wordSize * emulator.byteSize * 8;
+      const addressBitwidth = emulator.addressSize * emulator.byteSize * 8;
+      const mask = (1 << (register.type == "word" ? wordBitwidth : addressBitwidth)) - 1;
+      register.value = mask == 0 ? value : value & mask;
+    }
   };
   return constructed;
 }
