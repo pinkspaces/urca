@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "target": "ES2017",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "removeComments": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "strictPropertyInitialization": false
+  },
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}
